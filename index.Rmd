@@ -1,0 +1,247 @@
+---
+title: "Home based anxiety interventions meta-analysis"
+author: "Tamas Nagy"
+date: "6/29/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+bibliography: [references.bib]
+---
+
+```{r Packages & settings, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(encoding = 'UTF-8')
+
+library(tidyverse)
+library(readxl)
+library(metafor)
+library(metaviz)
+library(dmetar)
+library(janitor)
+library(citr)
+
+```
+
+```{r Prep bibliography, eval=FALSE, include=FALSE}
+# This does not have to be run
+# Creates a tidy bibliography from the local bib file
+citr::tidy_bib_file(messy_bibliography = "d:/Documents/Mendeley references/library.bib",
+                    file = "references.bib", 
+                    rmd_file = "index.Rmd",
+                    encoding = "UTF-8")
+
+```
+
+[@Viechtbauer2010b]
+
+```{r Load data}
+cbt <- 
+  read_excel("data/database_meta_anxiety.xlsx") %>% 
+  clean_names()
+
+
+```
+
+I think in the CMA you used the "method-of-moments estimator". According to @Viechtbauer2005, it is better to use the restricted maximum likelihood estimator. Using this only slightly changes the results, but IMO it is a more appropriate and defensible choice.
+
+```{r Build meta models}
+# Model for the children self-report MA
+selfrep_df <- 
+  cbt %>% 
+  filter(outcome == "children") 
+
+mod_selfrep <-  rma(yi = hedges_g, 
+      sei = se_hedges_g, 
+      data = selfrep_df, 
+      method = "REML")
+
+mod_selfrep
+
+
+# Model for the clinician rating MA
+mod_rate <-
+  cbt %>%
+  filter(outcome == "clinician") %>%
+  rma(yi = hedges_g,
+      sei = se_hedges_g, 
+      data = .,
+      method = "REML")
+
+mod_rate
+
+# Create tables that will be added to the forest plot
+selfrep_table <-
+  cbt %>% 
+  filter(outcome == "children") %>% 
+  select(Study = study, N = sample_size)
+
+selfrep_summary <- 
+  selfrep_table %>% 
+  group_by(name = "Aggregated effect") %>% 
+  summarise(N = sum(N))
+
+rate_table <-
+  cbt %>%  
+  filter(outcome == "clinician") %>% 
+  select(Study = study, N = sample_size)
+
+rate_summary <- 
+  rate_table %>% 
+  group_by(name = "Aggregated effect") %>% 
+  summarise(N = sum(N))
+
+```
+
+# Forest plots
+
+## Self-report
+### Metafor
+
+```{r fig.width = 9}
+forest(mod_selfrep, 
+       top = 3, 
+       xlab = "Hedges' g", 
+       slab = selfrep_table$Study,
+       mlab = "Aggregated effect", 
+       ilab = selfrep_table$N, 
+       ilab.xpos = -1.5)
+text(c(-3.9, -1.5, -0.5, 2.5, 5.3), 20, c("Study", "N","Favors control", "Favors intervention", "Hedges' [95%]"))
+
+```
+
+### metaviz
+
+```{r fig.width = 9, warning = FALSE}
+viz_forest(mod_selfrep, 
+           study_table = selfrep_table,
+           text_size = 4, 
+           annotate_CI = TRUE, 
+           xlab = "Hedges's g", 
+           summary_table = selfrep_summary)
+```
+
+
+## Clinician rating
+
+### metafor
+```{r fig.width = 9}
+forest(mod_rate, 
+       top = 3, 
+       xlab = "Hedges' g", 
+       slab = rate_table$Study,
+       mlab = "Aggregated effect", 
+       ilab = rate_table$N, 
+       alim = c(-2.5, 8),
+       ilab.xpos = -4)
+text(c(-11.5,-4, -1, 8, 17.9), 15, c("Study", "N","Favors control", "Favors intervention", "Hedges' [95%]"))
+```
+
+### metaviz
+
+```{r fig.width = 9, warning = FALSE}
+viz_forest(mod_rate, 
+           study_table = rate_table,
+           text_size = 3.5, 
+           xlab = "Hedges'g", 
+           summary_table = rate_summary,
+           annotate_CI = TRUE)
+```
+
+# Funnel plots
+## Self-report
+### metafor
+
+The first is a normal funnel plot, the second is a normal with trim-and-fill, the third is a contour enhanced funnel plot with trim-and-fill, centered on 0 (no effect). [@VanAssen2015a; @Peters2008]
+```{r}
+funnel(mod_selfrep, 
+       shade=c("white", "gray55"),
+       legend = TRUE)
+
+
+trimfill(mod_selfrep) %>% 
+  funnel(., 
+         shade=c("white", "gray55"),
+         legend = TRUE)
+
+trimfill(mod_selfrep) %>% 
+  funnel(., 
+         level=c(90, 95), 
+         shade=c("white", "gray55", "gray75"),
+         refline=0,
+         legend = TRUE)
+```
+
+As there seems to be some publication or small study bias, we can try to correct for that.
+The model remains significant.
+```{r}
+trimfill(mod_selfrep)
+```
+
+
+### metaviz
+
+This plot combines the zero centered contour funnel plot with the traditional funnel plot with the estimated effect (solid black vertical line), and the trim-and-fill adjusted aggregated effect size (dashed line). The TAF studies are filled, the real studies are hollow (I want to reverse that). 
+```{r}
+viz_funnel(mod_selfrep, 
+           method = "RE",
+           sig_contours = TRUE, 
+           contours = TRUE,
+           trim_and_fill = TRUE,
+           text_size = 4
+           ) +
+  geom_vline(xintercept = 0, alpha = .2, color = "blue", size = 2)
+  
+
+```
+
+## Clinician rating
+
+There was no need for the trim-and-fill here, so it is not visualized, and ES is not adjusted.
+
+### metafor
+
+```{r}
+funnel(mod_rate, 
+       shade=c("white", "gray55"),
+       legend = TRUE)
+
+funnel(mod_rate, 
+       level=c(90, 95), 
+       shade=c("white", "gray55", "gray75"),
+       refline=0,
+       legend = TRUE)
+
+```
+
+
+### metaviz
+```{r}
+viz_funnel(mod_rate, 
+           method = "RE",
+           sig_contours = TRUE, 
+           contours = TRUE,
+           text_size = 4) +
+  geom_vline(xintercept = 0, alpha = .2, color = "blue", size = 2)
+```
+
+# Outlier detection
+## Self-report
+
+```{r}
+leave1out(mod_selfrep)
+find.outliers(mod_selfrep)
+```
+
+## Clinician rating
+```{r}
+leave1out(mod_rate)
+find.outliers(mod_rate)
+```
+
+
+
+# References  
