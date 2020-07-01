@@ -1539,7 +1539,7 @@ library(metaviz)
 library(dmetar)
 library(janitor)
 library(citr)</code></pre>
-<p><span class="citation">(Viechtbauer 2010)</span></p>
+<p><span class="citation">(Viechtbauer, 2010)</span></p>
 <pre class="r"><code>cbt &lt;- 
   read_excel(&quot;data/database_meta_anxiety.xlsx&quot;) %&gt;% 
   clean_names()</code></pre>
@@ -1688,7 +1688,7 @@ text(c(-11.5,-4, -1, 8, 17.9), 15, c(&quot;Study&quot;, &quot;N&quot;,&quot;Favo
 <h2 number="2.1"><span class="header-section-number">2.1</span> Self-report</h2>
 <div id="metafor-2" class="section level3" number="2.1.1">
 <h3 number="2.1.1"><span class="header-section-number">2.1.1</span> metafor</h3>
-<p>The first is a normal funnel plot, the second is a normal with trim-and-fill, the third is a contour enhanced funnel plot with trim-and-fill, centered on 0 (no effect). <span class="citation">(van Assen, van Aert, and Wicherts 2015; Peters et al. 2008)</span></p>
+<p>The first is a normal funnel plot, the second is a normal with trim-and-fill, the third is a contour enhanced funnel plot with trim-and-fill, centered on 0 (no effect). <span class="citation">(Peters et al., 2008; van Assen et al., 2015)</span></p>
 <pre class="r"><code>funnel(mod_selfrep, 
        shade=c(&quot;white&quot;, &quot;gray55&quot;),
        legend = TRUE)</code></pre>
@@ -1903,16 +1903,16 @@ text(c(-11.5,-4, -1, 8, 17.9), 15, c(&quot;Study&quot;, &quot;N&quot;,&quot;Favo
 <h1 class="unnumbered" number>References</h1>
 <div id="refs" class="references hanging-indent">
 <div id="ref-Peters2008">
-<p>Peters, Jaime L., Alex J. Sutton, David R. Jones, Keith R. Abrams, and Lesley Rushton. 2008. “Contour-enhanced meta-analysis funnel plots help distinguish publication bias from other causes of asymmetry.” <em>Journal of Clinical Epidemiology</em> 61 (10): 991–96. <a href="https://doi.org/10.1016/j.jclinepi.2007.11.010">https://doi.org/10.1016/j.jclinepi.2007.11.010</a>.</p>
+<p>Peters, J. L., Sutton, A. J., Jones, D. R., Abrams, K. R., &amp; Rushton, L. (2008). Contour-enhanced meta-analysis funnel plots help distinguish publication bias from other causes of asymmetry. <em>Journal of Clinical Epidemiology</em>, <em>61</em>(10), 991–996. <a href="https://doi.org/10.1016/j.jclinepi.2007.11.010">https://doi.org/10.1016/j.jclinepi.2007.11.010</a></p>
 </div>
 <div id="ref-VanAssen2015a">
-<p>van Assen, Marcel A. L. M., Robbie C. M. van Aert, and Jelte M Wicherts. 2015. “Meta-analysis using effect size distributions of only statistically significant studies.” <em>Psychological Methods</em> 20 (3): 293–309. <a href="https://doi.org/10.1037/met0000025">https://doi.org/10.1037/met0000025</a>.</p>
-</div>
-<div id="ref-Viechtbauer2005">
-<p>Viechtbauer, Wolfgang. 2005. “Bias and Efficiency of Meta-Analytic Variance Estimators in the Random-Effects Model.” <em>Journal of Educational and Behavioral Statistics</em> 30 (3): 261–93. <a href="https://doi.org/10.3102/10769986030003261">https://doi.org/10.3102/10769986030003261</a>.</p>
+<p>van Assen, M. A. L. M., van Aert, R. C. M., &amp; Wicherts, J. M. (2015). Meta-analysis using effect size distributions of only statistically significant studies. <em>Psychological Methods</em>, <em>20</em>(3), 293–309. <a href="https://doi.org/10.1037/met0000025">https://doi.org/10.1037/met0000025</a></p>
 </div>
 <div id="ref-Viechtbauer2010b">
-<p>———. 2010. “Conducting Meta-Analyses in R with the metafor Package.” <em>Journal of Statistical Software</em> 36 (3): 121108. <a href="https://doi.org/10.18637/jss.v036.i03">https://doi.org/10.18637/jss.v036.i03</a>.</p>
+<p>Viechtbauer, W. (2010). Conducting Meta-Analyses in R with the metafor Package. <em>Journal of Statistical Software</em>, <em>36</em>(3), 121108. <a href="https://doi.org/10.18637/jss.v036.i03">https://doi.org/10.18637/jss.v036.i03</a></p>
+</div>
+<div id="ref-Viechtbauer2005">
+<p>Viechtbauer, W. (2005). Bias and Efficiency of Meta-Analytic Variance Estimators in the Random-Effects Model. <em>Journal of Educational and Behavioral Statistics</em>, <em>30</em>(3), 261–293. <a href="https://doi.org/10.3102/10769986030003261">https://doi.org/10.3102/10769986030003261</a></p>
 </div>
 </div>
 </div>
