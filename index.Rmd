@@ -13,6 +13,15 @@ csl: apa.csl
 bibliography: [references.bib]
 ---
 
+CHANGES:  
+
+- redo all analyses and viz without the outlier study, using REML estimation
+- keep only one forest and funnel plot for both MAs
+- do the meta regressions
+- all previous scripts can be found through git, so older script parts are removed
+
+# Prepare environment and data
+
 ```{r Packages & settings, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 options(encoding = 'UTF-8')
@@ -24,6 +33,7 @@ library(metaviz)
 library(dmetar)
 library(janitor)
 library(citr)
+library(osfr)
 
 ```
 
@@ -37,17 +47,37 @@ citr::tidy_bib_file(messy_bibliography = "d:/Documents/Mendeley references/libra
 
 ```
 
-[@Viechtbauer2010b]
+```{r Download data from osf}
+# Authenticate using a PAT
+osf_pat <- read_lines("osf_pat.txt")
+osf_auth(token = osf_pat)
 
-```{r Load data}
-cbt <- 
-  read_excel("data/database_meta_anxiety.xlsx") %>% 
-  clean_names()
+# Retrieve data to data folder
+osf_file <- 
+  osf_retrieve_file("bqy2p") %>%
+  osf_download(path = "data/",
+               conflicts = "overwrite",
+               progress = TRUE)
 
 
 ```
 
-I think in the CMA you used the "method-of-moments estimator". According to @Viechtbauer2005, it is better to use the restricted maximum likelihood estimator. Using this only slightly changes the results, but IMO it is a more appropriate and defensible choice.
+# Analysis
+
+
+```{r Load data}
+cbt <-
+  read_excel(osf_file$local_path, na = c("", "N/A")) %>% 
+  clean_names() %>% 
+  # Get the female ratio
+  mutate(female = map_dbl(female_n_total_n, ~eval(parse(text = .x))),
+         sessions_completed_totalsessions = str_replace_all(sessions_completed_totalsessions, ",", "."),
+         completed_sessions = map_dbl(sessions_completed_totalsessions, 
+                                      ~eval(parse(text = .x))))
+
+```
+
+The meta-analyses models were recaucluated using REML estimation. Using this only slightly changes the results, but IMO it is a more appropriate and defensible choice  @Viechtbauer2005.
 
 ```{r Build meta models}
 # Model for the children self-report MA
@@ -55,8 +85,9 @@ selfrep_df <-
   cbt %>% 
   filter(outcome == "children") 
 
-mod_selfrep <-  rma(yi = hedges_g, 
-      sei = se_hedges_g, 
+mod_selfrep <-  
+  rma(yi = hedges_g, 
+      sei = hedges_se, 
       data = selfrep_df, 
       method = "REML")
 
@@ -64,21 +95,99 @@ mod_selfrep
 
 
 # Model for the clinician rating MA
-mod_rate <-
+rate_df <- 
   cbt %>%
-  filter(outcome == "clinician") %>%
+  filter(outcome == "clinician")
+
+mod_rate <-
   rma(yi = hedges_g,
-      sei = se_hedges_g, 
-      data = .,
+      sei = hedges_se, 
+      data = rate_df,
       method = "REML")
 
 mod_rate
 
-# Create tables that will be added to the forest plot
-selfrep_table <-
+```
+
+## Outlier detection
+
+Studies that has a confidence interval completely outside of the aggregated effect's CI should be considered outliers. We identified the 2nd study and the 1st study from the self-report and clinician rated studies as outliers (these effect sizes came from the same study), so we removed this study, and recalculated the meta-analyses.
+
+```{r outlier detection}
+# Self-report
+find.outliers(mod_selfrep)
+# Clinician rating
+find.outliers(mod_rate)
+```
+
+
+```{r recalculate MA without outliers}
+# Remove outliers from self-report data
+selfrep_df <- 
   cbt %>% 
   filter(outcome == "children") %>% 
-  select(Study = study, N = sample_size)
+  slice(-2)
+
+# Corrected model for self-report data
+mod_selfrep <-  
+  rma(yi = hedges_g, 
+           sei = hedges_se, 
+           data = selfrep_df, 
+           method = "REML")
+
+find.outliers(mod_selfrep)
+
+# There is still one outlier, number 5 in the original dataset.
+# Let's remove it as well.
+selfrep_df <- 
+  cbt %>% 
+  filter(outcome == "children") %>% 
+  slice(-2, -5)
+
+mod_selfrep <-  
+  rma(yi = hedges_g, 
+           sei = hedges_se, 
+           data = selfrep_df, 
+           method = "REML")
+
+# No more outliers!
+find.outliers(mod_selfrep)
+# This is the final model
+mod_selfrep
+
+# Remove outliers from clinician-rating data
+
+
+rate_df <-   
+  cbt %>% 
+  filter(outcome == "clinician") %>% 
+  slice(-1)
+
+# Model for the clinician rating MA
+
+mod_rate <-
+  rma(yi = hedges_g,
+      sei = hedges_se, 
+      data = rate_df,
+      method = "REML")
+
+# No further outliers
+find.outliers(mod_rate)
+# Final model
+mod_rate
+
+```
+
+
+
+# Forest plots
+## Self-report
+
+```{r tables will be added}
+# Create tables that will be added to the forest plots
+selfrep_table <-
+  selfrep_df %>% 
+  select(Study = study_name, N = sample_size_total)
 
 selfrep_summary <- 
   selfrep_table %>% 
@@ -86,37 +195,17 @@ selfrep_summary <-
   summarise(N = sum(N))
 
 rate_table <-
-  cbt %>%  
-  filter(outcome == "clinician") %>% 
-  select(Study = study, N = sample_size)
+  rate_df %>% 
+  select(Study = study_name, N = sample_size_total)
 
 rate_summary <- 
   rate_table %>% 
   group_by(name = "Aggregated effect") %>% 
   summarise(N = sum(N))
-
 ```
-
-# Forest plots
 
 ## Self-report
-### Metafor
-
 ```{r fig.width = 9}
-forest(mod_selfrep, 
-       top = 3, 
-       xlab = "Hedges' g", 
-       slab = selfrep_table$Study,
-       mlab = "Aggregated effect", 
-       ilab = selfrep_table$N, 
-       ilab.xpos = -1.5)
-text(c(-3.9, -1.5, -0.5, 2.5, 5.3), 20, c("Study", "N","Favors control", "Favors intervention", "Hedges' [95%]"))
-
-```
-
-### metaviz
-
-```{r fig.width = 9, warning = FALSE}
 viz_forest(mod_selfrep, 
            study_table = selfrep_table,
            text_size = 4, 
@@ -125,24 +214,7 @@ viz_forest(mod_selfrep,
            summary_table = selfrep_summary)
 ```
 
-
 ## Clinician rating
-
-### metafor
-```{r fig.width = 9}
-forest(mod_rate, 
-       top = 3, 
-       xlab = "Hedges' g", 
-       slab = rate_table$Study,
-       mlab = "Aggregated effect", 
-       ilab = rate_table$N, 
-       alim = c(-2.5, 8),
-       ilab.xpos = -4)
-text(c(-11.5,-4, -1, 8, 17.9), 15, c("Study", "N","Favors control", "Favors intervention", "Hedges' [95%]"))
-```
-
-### metaviz
-
 ```{r fig.width = 9, warning = FALSE}
 viz_forest(mod_rate, 
            study_table = rate_table,
@@ -154,94 +226,108 @@ viz_forest(mod_rate,
 
 # Funnel plots
 ## Self-report
-### metafor
 
-The first is a normal funnel plot, the second is a normal with trim-and-fill, the third is a contour enhanced funnel plot with trim-and-fill, centered on 0 (no effect). [@VanAssen2015a; @Peters2008]
+As there seems to be some publication or small study bias, we can try to correct for that. Both models remain significant after trim-and-fill imputed studies. Also, the if we compare the overall effect size with TAF studies included, the effects remain similar.
+
+
 ```{r}
-funnel(mod_selfrep, 
-       shade=c("white", "gray55"),
-       legend = TRUE)
+# trimandfill tails for the first model, while it work in  the funnel plot 
+trimfill(selfrep_df$hedges_g,
+         selfrep_df$hedges_se,
+         ma.fixed = FALSE,
+         method.tau = "REML")
 
+# Egger's test
+regtest(mod_selfrep, model = "lm")
 
-trimfill(mod_selfrep) %>% 
-  funnel(., 
-         shade=c("white", "gray55"),
-         legend = TRUE)
-
-trimfill(mod_selfrep) %>% 
-  funnel(., 
-         level=c(90, 95), 
-         shade=c("white", "gray55", "gray75"),
-         refline=0,
-         legend = TRUE)
-```
-
-As there seems to be some publication or small study bias, we can try to correct for that.
-The model remains significant.
-```{r}
-trimfill(mod_selfrep)
-```
-
-
-### metaviz
-
-This plot combines the zero centered contour funnel plot with the traditional funnel plot with the estimated effect (solid black vertical line), and the trim-and-fill adjusted aggregated effect size (dashed line). The TAF studies are filled, the real studies are hollow (I want to reverse that). 
-```{r}
 viz_funnel(mod_selfrep, 
            method = "RE",
-           sig_contours = TRUE, 
+           sig_contours = FALSE,
            contours = TRUE,
            trim_and_fill = TRUE,
-           text_size = 4
-           ) +
-  geom_vline(xintercept = 0, alpha = .2, color = "blue", size = 2)
-  
+           text_size = 4)
+
 
 ```
 
 ## Clinician rating
 
-There was no need for the trim-and-fill here, so it is not visualized, and ES is not adjusted.
-
-### metafor
-
 ```{r}
-funnel(mod_rate, 
-       shade=c("white", "gray55"),
-       legend = TRUE)
+trimfill(rate_df$hedges_g,
+         rate_df$hedges_se,
+         ma.fixed = FALSE,
+         method.tau = "REML")
+# Egger's test
+regtest(mod_rate, model = "lm")
 
-funnel(mod_rate, 
-       level=c(90, 95), 
-       shade=c("white", "gray55", "gray75"),
-       refline=0,
-       legend = TRUE)
-
-```
-
-
-### metaviz
-```{r}
 viz_funnel(mod_rate, 
            method = "RE",
-           sig_contours = TRUE, 
+           sig_contours = FALSE, 
+           trim_and_fill = TRUE,
            contours = TRUE,
-           text_size = 4) +
-  geom_vline(xintercept = 0, alpha = .2, color = "blue", size = 2)
+           text_size = 4)
+
 ```
 
-# Outlier detection
-## Self-report
+# Meta-regressions
+
+## Self-rep
 
 ```{r}
-leave1out(mod_selfrep)
-find.outliers(mod_selfrep)
+## Family or youth focus (focus)
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~method)
+## Family or youth focus (focus)
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~focus)
+## Therapist involvement (therapist_involvement)
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~therapist_involvement)
+## Clinical status
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~clinical_status)
+## Place of delivery
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~placeof_delivery)
+## Study quality
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~study_quality)
+## Anxiety measure
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~anxiety_measure)
+## Intended length
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~intervention_length_n_of_modules)
+## Average length
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~completed_sessions)
+## Age
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~avg_age_pop)
+## Female ratio
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~female)
+
+
 ```
 
 ## Clinician rating
 ```{r}
-leave1out(mod_rate)
-find.outliers(mod_rate)
+## Family or youth focus (focus)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~method)
+## Family or youth focus (focus)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~focus)
+## Therapist involvement (therapist_involvement)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~therapist_involvement)
+## Clinical status
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~clinical_status)
+## Place of delivery
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~placeof_delivery)
+## Study quality
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~study_quality)
+## Anxiety measure
+# rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~anxiety_measure)
+## Intended length
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~intervention_length_n_of_modules)
+## Average length
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~completed_sessions)
+## Age
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~avg_age_pop)
+## Female ratio
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~female)
+
 ```
+
+## Dropouts?
 
 
 
