@@ -34,6 +34,7 @@ library(dmetar)
 library(janitor)
 library(citr)
 library(osfr)
+library(DiagrammeR)
 
 ```
 
@@ -269,66 +270,132 @@ viz_funnel(mod_rate,
 
 ```
 
-# Meta-regressions
+# Moderation analyses
 
 ## Self-rep
 
 ```{r}
+# Intervention characteristics
 ## Family or youth focus (focus)
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~method)
-## Family or youth focus (focus)
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~focus)
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~focus) %>% 
+  anova()
 ## Therapist involvement (therapist_involvement)
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~therapist_involvement)
-## Clinical status
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~clinical_status)
-## Place of delivery
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~placeof_delivery)
-## Study quality
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~study_quality)
-## Anxiety measure
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~anxiety_measure)
-## Intended length
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~intervention_length_n_of_modules)
-## Average length
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~completed_sessions)
-## Age
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~avg_age_pop)
-## Female ratio
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~female)
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~therapist_involvement) %>% 
+  anova()
 
+## Place of delivery
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~placeof_delivery) %>% anova()
+## Average length
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~completed_sessions)  %>% anova()
+
+# Study characteristics
+## Study quality
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~study_quality) %>% anova()
+## Anxiety measure
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~anxiety_measure) %>%  anova()
+## Intended length
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~intervention_length_n_of_modules) %>% anova()
+
+# Participant characteristics
+## Age
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~avg_age_pop) %>% anova()
+## Female ratio
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~female) %>% anova()
+## Clinical status
+rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~clinical_status) %>% anova()
 
 ```
 
 ## Clinician rating
 ```{r}
+## Method
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~method) %>% anova()
 ## Family or youth focus (focus)
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~method)
-## Family or youth focus (focus)
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~focus)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~focus) %>% anova()
 ## Therapist involvement (therapist_involvement)
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~therapist_involvement)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~therapist_involvement) %>% anova()
 ## Clinical status
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~clinical_status)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~clinical_status) %>% anova()
 ## Place of delivery
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~placeof_delivery)
-## Study quality
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~study_quality)
-## Anxiety measure
-# rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~anxiety_measure)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~placeof_delivery) %>% anova()
 ## Intended length
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~intervention_length_n_of_modules)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~intervention_length_n_of_modules) %>% anova()
+## Study quality
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~study_quality) %>% anova()
+## Clinician blinding
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~clinician_blinding) %>% anova()
+
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~intervention_length_n_of_modules) %>% anova()
 ## Average length
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~completed_sessions)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~completed_sessions) %>% anova()
 ## Age
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~avg_age_pop)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~avg_age_pop) %>% anova()
 ## Female ratio
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~female)
+rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~female) %>% anova()
+
+
 
 ```
 
-## Dropouts?
+## Dropout analysis
+```{r}
+selfrep_df %>% 
+  select(study_name, drop_out_int, drop_out_cont) %>% 
+  pivot_longer(-study_name,
+               names_to = "outcome",
+               values_to = "group") %>% 
+  group_by(outcome) %>% 
+  summarise(avg_dropout = mean(group, na.rm = TRUE),
+            med_dropout = median(group, na.rm = TRUE))
 
+  
+rate_df %>% 
+  select(study_name, drop_out_int, drop_out_cont) %>% 
+  pivot_longer(-study_name,
+               names_to = "outcome",
+               values_to = "group") %>% 
+  group_by(outcome) %>% 
+  summarise(avg_dropout = mean(group),
+            med_dropout = median(group))
+
+```
+
+## Dropouts and intervention length association
+## All dropouts as moderator
+
+
+# Blinding?
+
+# Flowcart
+WIP
+```{r}
+
+
+grViz("digraph flowchart {
+      # node definitions with substituted label text
+      node [fontname = Helvetica, shape = rectangle]  
+      cat1 [label = 'Screening']
+      
+      node [fontname = Helvetica, shape = rectangle]        
+      tab1 [label = 'Papers identified by database searches \\n k = 3113']
+      tab2 [label = 'Papers screened based on title and abstract \\n k = 431']
+      tab3 [label = 'Full text assessed for eligibility\\n k = 128']
+      tab4 [label = 'Papers included for meta-analysis\\n k = 18']
+      tab5 [label = 'Papers excluded based on title\\n k = 2682']
+      tab6 [label = 'Papers excluded based on abstract\\n k = 303']
+      tab7 [label = 'Papers excluded after full text assessed\\n k = 110']
+
+      # edge definitions with the node IDs
+      cat1
+      tab1 -> tab2 -> tab3 -> tab4
+      tab1 -> tab5
+      tab2 -> tab6
+      tab3 -> tab7
+      }
+
+
+      ")
+```
 
 
 # References  
