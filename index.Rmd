@@ -15,10 +15,9 @@ bibliography: [references.bib]
 
 CHANGES:  
 
-- redo all analyses and viz without the outlier study, using REML estimation
-- keep only one forest and funnel plot for both MAs
-- do the meta regressions
-- all previous scripts can be found through git, so older script parts are removed
+- Included a 2020 study
+- Added all analysis concerning parent ratings
+- Refactored some variable names for clarity (selfrep -> self, rating - > clinician)
 
 # Prepare environment and data
 
@@ -34,21 +33,21 @@ library(dmetar)
 library(janitor)
 library(citr)
 library(osfr)
-library(DiagrammeR)
+library(PRISMAstatement)
 
 ```
 
 ```{r Prep bibliography, eval=FALSE, include=FALSE}
 # This does not have to be run
 # Creates a tidy bibliography from the local bib file
-citr::tidy_bib_file(messy_bibliography = "d:/Documents/Mendeley references/library.bib",
-                    file = "references.bib", 
-                    rmd_file = "index.Rmd",
-                    encoding = "UTF-8")
+# citr::tidy_bib_file(messy_bibliography = "d:/Documents/Mendeley references/library.bib",
+#                     file = "references.bib", 
+#                     rmd_file = "index.Rmd",
+#                     encoding = "UTF-8")
 
 ```
 
-```{r Download data from osf}
+```{r Download data from osf, results = "hide", message=FALSE, warning=FALSE}
 # Authenticate using a PAT
 osf_pat <- read_lines("osf_pat.txt")
 osf_auth(token = osf_pat)
@@ -68,7 +67,7 @@ osf_file <-
 
 ```{r Load data}
 cbt <-
-  read_excel(osf_file$local_path, na = c("", "N/A")) %>% 
+  read_excel(here::here(osf_file$local_path), na = c("", "N/A")) %>%
   clean_names() %>% 
   # Get the female ratio
   mutate(female = map_dbl(female_n_total_n, ~eval(parse(text = .x))),
@@ -78,107 +77,106 @@ cbt <-
 
 ```
 
-The meta-analyses models were recaucluated using REML estimation. Using this only slightly changes the results, but IMO it is a more appropriate and defensible choice  @Viechtbauer2005.
+The meta-analyses models were recalculated using REML estimation. Using this only slghtly changes the results, but IMO it is a more appropriate and defensible choice  @Viechtbauer2005.
 
 ```{r Build meta models}
 # Model for the children self-report MA
-selfrep_df <- 
+self_df <- 
   cbt %>% 
   filter(outcome == "children") 
 
-mod_selfrep <-  
+mod_self <-  
   rma(yi = hedges_g, 
       sei = hedges_se, 
-      data = selfrep_df, 
+      data = self_df, 
       method = "REML")
 
-mod_selfrep
+mod_self
 
 
 # Model for the clinician rating MA
-rate_df <- 
+clinician_df <- 
   cbt %>%
   filter(outcome == "clinician")
 
-mod_rate <-
+mod_clinician <-
   rma(yi = hedges_g,
       sei = hedges_se, 
-      data = rate_df,
+      data = clinician_df,
       method = "REML")
 
-mod_rate
+mod_clinician
+
+# Model for the clinician rating MA
+parent_df <- 
+  cbt %>%
+  filter(outcome == "parental")
+
+mod_parent <-
+  rma(yi = hedges_g,
+      sei = hedges_se, 
+      data = parent_df,
+      method = "REML")
+
+mod_parent
 
 ```
 
 ## Outlier detection
 
-Studies that has a confidence interval completely outside of the aggregated effect's CI should be considered outliers. We identified the 2nd study and the 1st study from the self-report and clinician rated studies as outliers (these effect sizes came from the same study), so we removed this study, and recalculated the meta-analyses.
+Studies that has a confidence interval completely outside of the aggregated effect's CI should be considered outliers. We identified the Cobham et al. 2012 study as an outlier for both the self-report and the clincian rated outcomes, so we removed this study, and recalculated the meta-analyses. No outliers in the parental rating studies.
 
 ```{r outlier detection}
 # Self-report
-find.outliers(mod_selfrep)
+find.outliers(mod_self)
 # Clinician rating
-find.outliers(mod_rate)
+find.outliers(mod_clinician)
+# Clinician rating
+find.outliers(mod_parent)
 ```
 
 
 ```{r recalculate MA without outliers}
 # Remove outliers from self-report data
-selfrep_df <- 
+self_df <- 
   cbt %>% 
   filter(outcome == "children") %>% 
-  slice(-2)
+  slice(-1)
 
 # Corrected model for self-report data
-mod_selfrep <-  
+mod_self <-  
   rma(yi = hedges_g, 
            sei = hedges_se, 
-           data = selfrep_df, 
+           data = self_df, 
            method = "REML")
 
-find.outliers(mod_selfrep)
-
-# There is still one outlier, number 5 in the original dataset.
-# Let's remove it as well.
-selfrep_df <- 
-  cbt %>% 
-  filter(outcome == "children") %>% 
-  slice(-2, -5)
-
-mod_selfrep <-  
-  rma(yi = hedges_g, 
-           sei = hedges_se, 
-           data = selfrep_df, 
-           method = "REML")
+find.outliers(mod_self)
 
 # No more outliers!
-find.outliers(mod_selfrep)
-# This is the final model
-mod_selfrep
-
 # Remove outliers from clinician-rating data
-
-
-rate_df <-   
+clinician_df <-   
   cbt %>% 
   filter(outcome == "clinician") %>% 
   slice(-1)
 
 # Model for the clinician rating MA
-
-mod_rate <-
+mod_clinician <-
   rma(yi = hedges_g,
       sei = hedges_se, 
-      data = rate_df,
+      data = clinician_df,
       method = "REML")
 
 # No further outliers
-find.outliers(mod_rate)
-# Final model
-mod_rate
+find.outliers(mod_clinician)
 
 ```
 
+## Final models (without outliers)
+```{r}
+mod_self
+mod_clinician
+mod_parent
+```
 
 
 # Forest plots
@@ -186,64 +184,89 @@ mod_rate
 
 ```{r tables will be added}
 # Create tables that will be added to the forest plots
-selfrep_table <-
-  selfrep_df %>% 
+# Self-rating
+self_table <-
+  self_df %>% 
   select(Study = study_name, N = sample_size_total)
 
-selfrep_summary <- 
-  selfrep_table %>% 
+self_summary <- 
+  self_table %>% 
   group_by(name = "Aggregated effect") %>% 
   summarise(N = sum(N))
 
-rate_table <-
-  rate_df %>% 
+# Clinician rating
+clinician_table <-
+  clinician_df %>% 
   select(Study = study_name, N = sample_size_total)
 
-rate_summary <- 
-  rate_table %>% 
+clinician_summary <- 
+  clinician_table %>% 
   group_by(name = "Aggregated effect") %>% 
   summarise(N = sum(N))
+
+# Parental rating
+parent_table <-
+  parent_df %>% 
+  select(Study = study_name, N = sample_size_total)
+
+parent_summary <- 
+  parent_table %>% 
+  group_by(name = "Aggregated effect") %>% 
+  summarise(N = sum(N))
+
 ```
 
 ## Self-report
 ```{r fig.width = 9}
-viz_forest(mod_selfrep, 
-           study_table = selfrep_table,
+viz_forest(mod_self, 
+           study_table = self_table,
            text_size = 4, 
            annotate_CI = TRUE, 
            xlab = "Hedges's g", 
-           summary_table = selfrep_summary)
+           summary_table = self_summary)
 ```
 
 ## Clinician rating
 ```{r fig.width = 9, warning = FALSE}
-viz_forest(mod_rate, 
-           study_table = rate_table,
+viz_forest(mod_clinician, 
+           study_table = clinician_table,
            text_size = 3.5, 
            xlab = "Hedges'g", 
-           summary_table = rate_summary,
+           summary_table = clinician_summary,
+           annotate_CI = TRUE)
+```
+
+## Parental rating
+```{r fig.width = 9, warning = FALSE}
+viz_forest(mod_parent, 
+           study_table = parent_table,
+           text_size = 3.5, 
+           xlab = "Hedges'g", 
+           summary_table = parent_summary,
            annotate_CI = TRUE)
 ```
 
 # Funnel plots
 ## Self-report
 
-As there seems to be some publication or small study bias, we can try to correct for that. Both models remain significant after trim-and-fill imputed studies. Also, the if we compare the overall effect size with TAF studies included, the effects remain similar.
+As there seems to be some publication or small study bias, we can try to correct for that. Self-report, clinician-rating, and parent-rating models were corrected by 4, 4, and 3 TAF studies, respectively.
+
+All models remained significant after trim-and-fill imputed studies. Also, the if we compare the overall effect size with TAF studies included, the effects remain similar.
 
 
 ```{r}
-# trimandfill tails for the first model, while it work in  the funnel plot 
-trimfill(selfrep_df$hedges_g,
-         selfrep_df$hedges_se,
+# trimandfill tails for the first model, while it work in the funnel plot 
+trimfill(self_df$hedges_g,
+         self_df$hedges_se,
          ma.fixed = FALSE,
          method.tau = "REML")
 
 # Egger's test
-regtest(mod_selfrep, model = "lm")
+regtest(mod_self, model = "lm")
 
-viz_funnel(mod_selfrep, 
+viz_funnel(mod_self, 
            method = "RE",
-           sig_contours = FALSE,
+           sig_contours = TRUE, 
            contours = TRUE,
            trim_and_fill = TRUE,
            text_size = 4)
@@ -254,16 +277,37 @@ viz_funnel(mod_selfrep,
 ## Clinician rating
 
 ```{r}
-trimfill(rate_df$hedges_g,
-         rate_df$hedges_se,
+trimfill(clinician_df$hedges_g,
+         clinician_df$hedges_se,
          ma.fixed = FALSE,
          method.tau = "REML")
-# Egger's test
-regtest(mod_rate, model = "lm")
 
-viz_funnel(mod_rate, 
+# Egger's test
+regtest(mod_clinician, model = "lm")
+
+viz_funnel(mod_clinician, 
            method = "RE",
-           sig_contours = FALSE, 
+           sig_contours = TRUE, 
+           trim_and_fill = TRUE,
+           contours = TRUE,
+           text_size = 4)
+
+```
+
+## Parental rating
+
+```{r}
+trimfill(parent_df$hedges_g,
+         parent_df$hedges_se,
+         ma.fixed = FALSE,
+         method.tau = "REML")
+
+# Egger's test
+regtest(mod_parent, model = "lm")
+
+viz_funnel(mod_parent, 
+           method = "RE",
+           sig_contours = TRUE, 
            trim_and_fill = TRUE,
            contours = TRUE,
            text_size = 4)
@@ -272,74 +316,99 @@ viz_funnel(mod_rate,
 
 # Moderation analyses
 
-## Self-rep
+## Self-report
 
 ```{r}
 # Intervention characteristics
 ## Family or youth focus (focus)
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~focus) %>% 
+rma.uni(hedges_g, sei = hedges_se, data = self_df, mods = ~focus) %>% 
   anova()
 ## Therapist involvement (therapist_involvement)
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~therapist_involvement) %>% 
+rma.uni(hedges_g, sei = hedges_se, data = self_df, 
+        mods = ~therapist_involvement) %>% 
   anova()
 
 ## Place of delivery
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~placeof_delivery) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = self_df, mods = ~placeof_delivery) %>% anova()
 ## Average length
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~completed_sessions)  %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = self_df, mods = ~completed_sessions)  %>% anova()
 
 # Study characteristics
 ## Study quality
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~study_quality) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = self_df, mods = ~risk_of_bias) %>% anova()
 ## Anxiety measure
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~anxiety_measure) %>%  anova()
+rma.uni(hedges_g, sei = hedges_se, data = self_df, mods = ~anxiety_measure) %>%  anova()
 ## Intended length
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~intervention_length_n_of_modules) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = self_df, mods = ~intervention_length_n_of_modules) %>% anova()
 
 # Participant characteristics
 ## Age
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~avg_age_pop) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = self_df, mods = ~avg_age_pop) %>% anova()
 ## Female ratio
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~female) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = self_df, mods = ~female) %>% anova()
 ## Clinical status
-rma.uni(hedges_g, sei = hedges_se, data = selfrep_df, mods = ~clinical_status) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = self_df, mods = ~clinical_status) %>% anova()
 
 ```
 
 ## Clinician rating
 ```{r}
 ## Method
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~method) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~method) %>% anova()
 ## Family or youth focus (focus)
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~focus) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~focus) %>% anova()
 ## Therapist involvement (therapist_involvement)
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~therapist_involvement) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~therapist_involvement) %>% anova()
 ## Clinical status
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~clinical_status) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~clinical_status) %>% anova()
 ## Place of delivery
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~placeof_delivery) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~placeof_delivery) %>% anova()
 ## Intended length
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~intervention_length_n_of_modules) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~intervention_length_n_of_modules) %>% anova()
 ## Study quality
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~study_quality) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~risk_of_bias) %>% anova()
 ## Clinician blinding
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~clinician_blinding) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~clinician_blinding) %>% anova()
 
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~intervention_length_n_of_modules) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~intervention_length_n_of_modules) %>% anova()
 ## Average length
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~completed_sessions) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~completed_sessions) %>% anova()
 ## Age
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~avg_age_pop) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~avg_age_pop) %>% anova()
 ## Female ratio
-rma.uni(hedges_g, sei = hedges_se, data = rate_df, mods = ~female) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~female) %>% anova()
 
+```
 
+## Parent rating
+```{r}
+## Method is significant!
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~method) %>% anova()
+## Family or youth focus (focus)
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~focus) %>% anova()
+## Therapist involvement (therapist_involvement)
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~therapist_involvement) %>% anova()
+## Clinical status
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~clinical_status) %>% anova()
+## Place of delivery
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~placeof_delivery) %>% anova()
+## Intended length
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~intervention_length_n_of_modules) %>% anova()
+## Study quality
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~risk_of_bias) %>% anova()
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~intervention_length_n_of_modules) %>% anova()
+## Average length
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~completed_sessions) %>% anova()
+## Age
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~avg_age_pop) %>% anova()
+## Female ratio
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~female) %>% anova()
 
 ```
 
 ## Dropout analysis
-```{r}
-selfrep_df %>% 
+```{r eval=FALSE, include=FALSE}
+self_df %>% 
   select(study_name, drop_out_int, drop_out_cont) %>% 
   pivot_longer(-study_name,
                names_to = "outcome",
@@ -349,7 +418,7 @@ selfrep_df %>%
             med_dropout = median(group, na.rm = TRUE))
 
   
-rate_df %>% 
+clinician_df %>% 
   select(study_name, drop_out_int, drop_out_cont) %>% 
   pivot_longer(-study_name,
                names_to = "outcome",
@@ -364,12 +433,19 @@ rate_df %>%
 ## All dropouts as moderator
 
 
-# Blinding?
-
 # Flowcart
 WIP
-```{r}
+```{r eval=FALSE, include=FALSE}
 
+prisma_graph(found = 3113, 
+             found_other = 0,
+             screened = 431,
+             screen_exclusions = 0,
+             no_dupes = 10,
+             full_text = 0, 
+             full_text_exclusions = 0, 
+             qualitative = 0, 
+             quantitative = 0)
 
 grViz("digraph flowchart {
       # node definitions with substituted label text
