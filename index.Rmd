@@ -34,6 +34,8 @@ library(janitor)
 library(citr)
 library(osfr)
 library(PRISMAstatement)
+library(patchwork)
+library(here)
 
 ```
 
@@ -224,6 +226,9 @@ viz_forest(mod_self,
            annotate_CI = TRUE, 
            xlab = "Hedges's g", 
            summary_table = self_summary)
+
+ggsave(filename = here("figures/fig2_forest_self-report.png"), width = 13, height = 7)
+
 ```
 
 ## Clinician rating
@@ -234,6 +239,8 @@ viz_forest(mod_clinician,
            xlab = "Hedges'g", 
            summary_table = clinician_summary,
            annotate_CI = TRUE)
+
+ggsave(filename = here("figures/fig3_forest_clinician.png"), width = 13, height = 7)
 ```
 
 ## Parental rating
@@ -244,6 +251,8 @@ viz_forest(mod_parent,
            xlab = "Hedges'g", 
            summary_table = parent_summary,
            annotate_CI = TRUE)
+
+ggsave(filename = here("figures/fig4_forest_parent.png"), width = 13, height = 7)
 ```
 
 # Funnel plots
@@ -264,13 +273,16 @@ trimfill(self_df$hedges_g,
 # Egger's test
 regtest(mod_self, model = "lm")
 
-viz_funnel(mod_self, 
-           method = "RE",
-           sig_contours = TRUE, 
-           contours = TRUE,
-           trim_and_fill = TRUE,
-           text_size = 4)
+funnel_self <- 
+  viz_funnel(mod_self, 
+             method = "RE",
+             sig_contours = TRUE, 
+             contours = TRUE,
+             trim_and_fill = TRUE,
+             text_size = 4) +
+  labs(title = "Self-report")
 
+ggsave(plot = funnel_self, filename = here("figures/fig_funnel_self-report.png"), width = 13, height = 7)
 
 ```
 
@@ -285,12 +297,16 @@ trimfill(clinician_df$hedges_g,
 # Egger's test
 regtest(mod_clinician, model = "lm")
 
+funnel_clinician <- 
 viz_funnel(mod_clinician, 
            method = "RE",
            sig_contours = TRUE, 
            trim_and_fill = TRUE,
            contours = TRUE,
-           text_size = 4)
+           text_size = 4) +
+  labs(title = "Clinician rated")
+
+ggsave(plot = funnel_clinician, filename = here("figures/fig_funnel_clinician.png"), width = 13, height = 7)
 
 ```
 
@@ -305,14 +321,27 @@ trimfill(parent_df$hedges_g,
 # Egger's test
 regtest(mod_parent, model = "lm")
 
-viz_funnel(mod_parent, 
-           method = "RE",
-           sig_contours = TRUE, 
-           trim_and_fill = TRUE,
-           contours = TRUE,
-           text_size = 4)
+funnel_parent <- 
+  viz_funnel(mod_parent, 
+             method = "RE",
+             sig_contours = TRUE, 
+             trim_and_fill = TRUE,
+             contours = TRUE,
+             text_size = 4) +
+  labs(title = "Parent rated")
+
+ggsave(plot = funnel_parent, filename = here("figures/fig_funnel_parent.png"), width = 13, height = 7)
 
 ```
+
+# Combine funnel plots
+```{r}
+
+funnel_self + funnel_clinician + funnel_parent
+
+```
+
+
 
 # Moderation analyses
 
@@ -384,6 +413,10 @@ rma.uni(hedges_g, sei = hedges_se, data = clinician_df, mods = ~female) %>% anov
 ```{r}
 ## Method is significant!
 rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~method) %>% anova()
+
+rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~method) %>% 
+  metaviz::viz_forest()
+
 ## Family or youth focus (focus)
 rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~focus) %>% anova()
 ## Therapist involvement (therapist_involvement)
@@ -406,7 +439,7 @@ rma.uni(hedges_g, sei = hedges_se, data = parent_df, mods = ~female) %>% anova()
 
 ```
 
-## Dropout analysis
+# Dropout analysis
 ```{r eval=FALSE, include=FALSE}
 self_df %>% 
   select(study_name, drop_out_int, drop_out_cont) %>% 
